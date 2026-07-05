@@ -20,6 +20,7 @@ int main() {
     CURL *curl = curl_easy_init();
     if (!curl) {
         // HTTP request failed
+        std::cerr << "Failed to initialize CURL\n";
         return 1;
     }
 
@@ -28,6 +29,7 @@ int main() {
     const std::string GEONAMES_USERNAME = read_env_value("GEONAMES_USERNAME");
     if (GEONAMES_USERNAME.empty()) {
         curl_easy_cleanup(curl);
+        std::cerr << "GEONAMES_USERNAME environment variable is not set\n";
         return 1;
     }
 
@@ -46,6 +48,7 @@ int main() {
     CURLcode result = curl_easy_perform(curl);
     if (result != CURLE_OK) {
         curl_easy_cleanup(curl);
+        std::cerr << "Failed to perform CURL request\n";
         return 1;
     }
 
@@ -53,11 +56,13 @@ int main() {
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
     if (http_status != 200) {
         curl_easy_cleanup(curl);
+        std::cerr << "HTTP request failed with status code: " << http_status << '\n';
         return 1;
     }
 
     if (response.empty()) {
         curl_easy_cleanup(curl);
+        std::cerr << "Received empty response\n";
         return 1;
     }
 
@@ -66,6 +71,7 @@ int main() {
     try {
         JSON data = JSON::parse(response);
         if (!data.contains("geonames") || !data["geonames"].is_array()) {
+            std::cerr << "Invalid response format: 'geonames' key not found or is not an array\n";
             return 1;
         }
 
@@ -73,15 +79,21 @@ int main() {
 
         for (const auto &city : data["geonames"]) {
             cities.push_back({
-                city["lat"],
-                city["lng"]
+                std::stod(city["lat"].get<std::string>()),
+                std::stod(city["lng"].get<std::string>())
             });
+        }
+
+        for (const auto &city : cities) {
+            std::cout << "City: lat=" << city.lat << ", lng=" << city.lng << '\n';
         }
     }
     catch (const JSON::parse_error &e) {
+        std::cerr << "Failed to parse JSON response: " << e.what() << '\n';
         return 1;
     } 
     catch (JSON::exception &e) {
+        std::cerr << "JSON exception occurred: " << e.what() << '\n';
         return 1;
     }
 
@@ -143,3 +155,4 @@ size_t receive_data(void *contents, size_t size, size_t count, void *userp) {
 
     return total_size;
 }
+
