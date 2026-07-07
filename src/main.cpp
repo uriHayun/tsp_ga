@@ -1,17 +1,22 @@
+#include <algorithm>
 #include <curl/curl.h>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <nlohmann/json.hpp>
+#include <random>
 #include <vector>
 #include <string>
 
 using JSON = nlohmann::json;
+using State = std::vector<int>;
 
 struct City {
     double lat;
     double lng;
 };
 
+State random_state(const int N);
 std::string trim(const std::string &value);
 std::string read_env_value(const std::string &key);
 size_t receive_data(void *contents, size_t size, size_t count, void *userp);
@@ -87,6 +92,8 @@ int main() {
         for (const auto &city : cities) {
             std::cout << "City: lat=" << city.lat << ", lng=" << city.lng << '\n';
         }
+
+
     }
     catch (const JSON::parse_error &e) {
         std::cerr << "Failed to parse JSON response: " << e.what() << '\n';
@@ -99,6 +106,30 @@ int main() {
 
     return 0;
 }
+
+// Return a random unsorted sequence of integers 0 to N-1
+State random_state(const int N) {
+    // Create a state with N ordered cities (0 to N-1)
+    State state(N);
+    std::iota(state.begin(), state.end(), 0);
+
+    // Shuffle the ordered state to create a random state
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(state.begin(), state.end(), g);
+
+    return state;
+}
+
+
+
+
+
+
+
+
+
 
 std::string trim(const std::string &value) {
     const auto first = value.find_first_not_of(" \t\r\n");
