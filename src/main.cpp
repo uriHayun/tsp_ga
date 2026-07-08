@@ -129,9 +129,9 @@ State random_state(const int N) {
 // Returns the total distance of a tour represented by a state
 double tour_dist(const State &state, const std::vector<City> &cities) {
     double total_dist = 0.0;
-    for (int i = 0; i < state.size(); i++) {
+    for (int i = 0; i < static_cast<int>(state.size()); i++) {
         const City &to_city = cities[state[i]];
-        const City &from_city = cities[state[i + 1 % state.size()]];
+        const City &from_city = cities[state[(i + 1) % state.size()]];
         total_dist += haversine_dist(from_city.lat, from_city.lng,
                                        to_city.lat, to_city.lng);
     }
