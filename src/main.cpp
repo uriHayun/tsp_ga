@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <curl/curl.h>
 #include <fstream>
+#include "haversine.hpp"
 #include <iostream>
 #include <numeric>
 #include <nlohmann/json.hpp>
@@ -16,6 +17,8 @@ struct City {
     double lng;
 };
 
+double fitness(const State &state, const std::vector<City> &cities);
+double tour_dist(const State &state, const std::vector<City> &cities);
 State random_state(const int N);
 std::string trim(const std::string &value);
 std::string read_env_value(const std::string &key);
@@ -120,6 +123,26 @@ State random_state(const int N=50) {
     return state;
 }
 
+// Returns the total distance of a tour represented by a state
+double tour_dist(const State &state, const std::vector<City> &cities) {
+    double total_dist = 0.0;
+    for (int i = 0; i < state.size(); i++) {
+        const City &to_city = cities[state[i]];
+        const City &from_city = cities[state[i + 1 % state.size()]];
+        total_dist += haversine_dist(from_city.lat, from_city.lng,
+                                       to_city.lat, to_city.lng);
+    }
+    return total_dist;
+}
+
+// Converts state's tour's distance into a fitness score
+double fitness(const State &state, const std::vector<City> &cities) {
+    double dist = tour_dist(state, cities);
+
+    // Fitness score is inversely proportional to distance
+    // Add a small epsilon to avoid division by 0 (0 distance edge case)
+    return 1.0 / (dist + 1e-9);
+}
 
 //
 std::string trim(const std::string &value) {
