@@ -22,7 +22,7 @@ const State &tournament_select(const std::vector<State> &pop, const std::vector<
                         std::mt19937 &g, int k = 5);
 double fitness(const State &state, const std::vector<City> &cities);
 double tour_dist(const State &state, const std::vector<City> &cities);
-State random_state(const int N);
+State random_state(const int N = 50);
 std::string trim(const std::string &value);
 std::string read_env_value(const std::string &key);
 size_t receive_data(void *contents, size_t size, size_t count, void *userp);
@@ -112,7 +112,7 @@ int main() {
 }
 
 // Returns a random unsorted sequence of integers 0 to N-1
-State random_state(const int N=50) {
+State random_state(const int N) {
     // Create a state with N ordered cities (0 to N-1)
     State state(N);
     std::iota(state.begin(), state.end(), 0);
