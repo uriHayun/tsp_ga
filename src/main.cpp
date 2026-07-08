@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <curl/curl.h>
 #include <fstream>
 #include "haversine.hpp"
@@ -17,6 +18,8 @@ struct City {
     double lng;
 };
 
+const State &tournament_select(const std::vector<State> &pop, const std::vector<City> &cities,
+                        std::mt19937 &g, int k = 5);
 double fitness(const State &state, const std::vector<City> &cities);
 double tour_dist(const State &state, const std::vector<City> &cities);
 State random_state(const int N);
@@ -142,6 +145,27 @@ double fitness(const State &state, const std::vector<City> &cities) {
     // Fitness score is inversely proportional to distance
     // Add a small epsilon to avoid division by 0 (0 distance edge case)
     return 1.0 / (dist + 1e-9);
+}
+
+const State &tournament_select(const std::vector<State> &pop, const std::vector<City> &cities,
+                        std::mt19937 &g, int k) {
+    assert(!pop.empty());
+
+    std::uniform_int_distribution<size_t> distribution(0, pop.size() - 1);
+    size_t best_candidate_idx = distribution(g);
+    double best_score = fitness(pop[best_candidate_idx], cities);
+
+    for (int i = 0; i < k - 1; i++) {
+        const size_t candidate_idx = distribution(g);
+        const double candidate_score = fitness(pop[candidate_idx], cities);
+
+        if (best_score < candidate_score) {
+            // Current candidate becomes the best candidate
+            best_candidate_idx = candidate_idx;
+            best_score = candidate_score;
+        }
+    }
+    return pop[best_candidate_idx];  // Best candidate from tournament
 }
 
 //
