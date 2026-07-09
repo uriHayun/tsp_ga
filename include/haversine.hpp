@@ -1,5 +1,4 @@
-#ifndef HAVERSINE_HPP
-#define HAVERSINE_HPP
+#pragma once
 
 #include <cmath>
 
@@ -30,5 +29,3 @@ inline double haversine_dist(double lat1, double lng1, double lat2, double lng2)
     constexpr int earth_radius_km = 6371;
     return earth_radius_km * c;  // Air distance (km)
 }
-
-#endif
