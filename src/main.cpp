@@ -1,8 +1,11 @@
+#include "haversine.hpp"
+#include "tour.hpp"
+
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <curl/curl.h>
 #include <fstream>
-#include "haversine.hpp"
 #include <iostream>
 #include <numeric>
 #include <nlohmann/json.hpp>
@@ -11,21 +14,20 @@
 #include <string>
 
 using JSON = nlohmann::json;
-using State = std::vector<int>;
 
 struct City {
     double lat;
     double lng;
 };
 
-const State &tournament_select(const std::vector<State> &pop, const std::vector<City> &cities,
+const Tour &tournamentSelect(const std::vector<Tour> &pop, const std::vector<City> &cities,
                         std::mt19937 &g, int k = 5);
-double fitness(const State &state, const std::vector<City> &cities);
-double tour_dist(const State &state, const std::vector<City> &cities);
-State random_state(const int N = 50);
+double fitness(const Tour &tour, const std::vector<City> &cities);
+double tourDist(const Tour &tour, const std::vector<City> &cities);
+Tour randomTour(const int N = 50);
 std::string trim(const std::string &value);
-std::string read_env_value(const std::string &key);
-size_t receive_data(void *contents, size_t size, size_t count, void *userp);
+std::string readEnvValue(const std::string &key);
+std::size_t receiveData(void *contents, std::size_t size, std::size_t count, void *userp);
 
 int main() {
     CURL *curl = curl_easy_init();
@@ -37,7 +39,7 @@ int main() {
 
     std::string response;
     
-    const std::string GEONAMES_USERNAME = read_env_value("GEONAMES_USERNAME");
+    const std::string GEONAMES_USERNAME = readEnvValue("GEONAMES_USERNAME");
     if (GEONAMES_USERNAME.empty()) {
         curl_easy_cleanup(curl);
         std::cerr << "GEONAMES_USERNAME environment variable is not set\n";
@@ -48,15 +50,17 @@ int main() {
                             "?country=IL&featureClass=P&maxRows=50&username=" + GEONAMES_USERNAME;
 
     curl_easy_setopt(curl, CURLOPT_URL, URL.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, receive_data);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, receiveData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     
     // Follow HTTP redirects (301, 302) automatically
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, static_cast<long>(1));
+    // libcurl excpects option values to be type long
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
     // Prevent the request from hanging indefinitely by limiting the connection and total timeouts
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, static_cast<long>(10));
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, static_cast<long>(15));
+    // libcurl excpects option values to be type long
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
 
     CURLcode result = curl_easy_perform(curl);
     if (result != CURLE_OK) {
@@ -65,11 +69,11 @@ int main() {
         return 1;
     }
 
-    long http_status = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
-    if (http_status != 200) {
+    long httpStatus = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpStatus);
+    if (httpStatus != 200) {
         curl_easy_cleanup(curl);
-        std::cerr << "HTTP request failed with status code: " << http_status << '\n';
+        std::cerr << "HTTP request failed with status code: " << httpStatus << '\n';
         return 1;
     }
 
@@ -114,62 +118,62 @@ int main() {
 }
 
 // Returns a random unsorted sequence of integers 0 to N-1
-State random_state(const int N) {
+Tour randomTour(const int N) {
     // Create a state with N (50) ordered cities (0 to N-1)
-    State state(N);
-    std::iota(state.begin(), state.end(), 0);
+    Tour tour(N);
+    std::iota(tour.begin(), tour.end(), 0);
 
     // Shuffle the ordered state to create a random state
     std::random_device rd;
     std::mt19937 g(rd());
 
-    std::shuffle(state.begin(), state.end(), g);
+    std::shuffle(tour.begin(), tour.end(), g);
 
-    return state;
+    return tour;
 }
 
 // Returns the total distance of a tour represented by a state
-double tour_dist(const State &state, const std::vector<City> &cities) {
-    double total_dist = 0.0;
-    for (int i = 0; i < static_cast<int>(state.size()); i++) {
-        const City &to_city = cities[state[i]];
+double tourDist(const Tour &tour, const std::vector<City> &cities) {
+    double totalDist = 0.0;
+    for (int i = 0; i < static_cast<int>(tour.size()); i++) {
+        const City &toCity = cities[tour[i]];
         
         // Wrap around to first using after the last city using modulo operator
-        const City &from_city = cities[state[(i + 1) % state.size()]];
-        total_dist += haversine_dist(from_city.lat, from_city.lng,
-                                       to_city.lat, to_city.lng);
+        const City &fromCity = cities[tour[(i + 1) % tour.size()]];
+        totalDist += haversine_dist(fromCity.lat, fromCity.lng,
+                                       toCity.lat, toCity.lng);
     }
-    return total_dist;
+    return totalDist;
 }
 
-// Converts state's tour's distance into a fitness score
-double fitness(const State &state, const std::vector<City> &cities) {
-    double dist = tour_dist(state, cities);
+// Converts tour's distance into a fitness score
+double fitness(const Tour &tour, const std::vector<City> &cities) {
+    double dist = tourDist(tour, cities);
 
     // Fitness score is inversely proportional to distance
     // Add a small epsilon to avoid division by 0 (0 distance edge case)
     return 1.0 / (dist + 1e-9);
 }
 
-const State &tournament_select(const std::vector<State> &pop, const std::vector<City> &cities,
+const Tour &tournamentSelect(const std::vector<Tour> &pop, const std::vector<City> &cities,
                         std::mt19937 &g, int k) {
     assert(!pop.empty());
 
-    std::uniform_int_distribution<size_t> distribution(0, pop.size() - 1);
-    size_t best_candidate_idx = distribution(g);
-    double best_score = fitness(pop[best_candidate_idx], cities);
+    std::uniform_int_distribution<std::size_t> distribution(0, pop.size() - 1);
+    std::size_t bestCandidateIdx = distribution(g);
+    double bestScore = fitness(pop[bestCandidateIdx], cities);
 
     for (int i = 0; i < k - 1; i++) {
-        const size_t candidate_idx = distribution(g);
-        const double candidate_score = fitness(pop[candidate_idx], cities);
+        const std::size_t candidateIdx = distribution(g);
+        const double candidateScore = fitness(pop[candidateIdx], cities);
 
-        if (best_score < candidate_score) {
+        if (bestScore < candidateScore) {
             // Current candidate becomes the best candidate
-            best_candidate_idx = candidate_idx;
-            best_score = candidate_score;
+            bestCandidateIdx = candidateIdx;
+            bestScore = candidateScore;
         }
     }
-    return pop[best_candidate_idx];  // Best candidate from tournament
+    return pop[bestCandidateIdx];  // Best candidate from tournament
 }
 
 // Removes leading and trailing whitespace from a string
@@ -189,14 +193,14 @@ std::string trim(const std::string &value) {
  * Must cite AI-generated code: logic for reading from .env file 
  * generated by GitHub Copilot (and Claude), modified by dev
  */
-std::string read_env_value(const std::string &key) {
-    std::ifstream env_file(".env");
-    if (!env_file.is_open()) {
+std::string readEnvValue(const std::string &key) {
+    std::ifstream envFile(".env");
+    if (!envFile.is_open()) {
         return "";
     }
 
     std::string line;
-    while (std::getline(env_file, line)) {
+    while (std::getline(envFile, line)) {
         if (line.empty() || line[0] == '#') {
             continue;
         }
@@ -206,16 +210,16 @@ std::string read_env_value(const std::string &key) {
             continue;
         }
 
-        std::string current_key = trim(line.substr(0, separator));
-        std::string current_value = trim(line.substr(separator + 1));
+        std::string currKey = trim(line.substr(0, separator));
+        std::string currValue = trim(line.substr(separator + 1));
 
-        if (current_value.size() >= 2 && current_value.front() == '"' 
-                                      && current_value.back() == '"') {
-            current_value = current_value.substr(1, current_value.size() - 2);
+        if (currValue.size() >= 2 && currValue.front() == '"' 
+                                      && currValue.back() == '"') {
+            currValue = currValue.substr(1, currValue.size() - 2);
         }
 
-        if (current_key == key) {
-            return current_value;
+        if (currKey == key) {
+            return currValue;
         }
     }
 
@@ -224,11 +228,11 @@ std::string read_env_value(const std::string &key) {
 
 // libcurl callback to append the HTTP received response data to a string
 // Note: libcurl is a C library, so this callback uses raw pointers instead of C++ references
-size_t receive_data(void *contents, size_t size, size_t count, void *userp) {
-    size_t total_size = size * count;
+std::size_t receiveData(void *contents, std::size_t size, std::size_t count, void *userp) {
+    std::size_t totalSize = size * count;
     std::string *res = static_cast<std::string *>(userp);
-    res->append(static_cast<char *>(contents),  total_size);
+    res->append(static_cast<char *>(contents),  totalSize);
 
-    return total_size;
+    return totalSize;
 }
 
