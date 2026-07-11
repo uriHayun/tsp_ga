@@ -1,14 +1,15 @@
 #pragma once
 
-#include <cmath>
+#include <numbers>
 
 /* 
  * Returns (air) distance in km between 2 points using Haversine formula
+ *
  * Note: < ~0.5% error (typically less), not worth using more precise formulas (e.g. Vincenty's)
  */
 inline double haversine_dist(double lat1, double lng1, double lat2, double lng2) {
     // Convert coordinates (in degrees) to radians
-    auto degrees_to_radians = [](double deg) { return deg * M_PI / 180.0; };
+    auto degrees_to_radians = [](double deg) { return deg * std::numbers::pi / 180.0; };
 
     lat1 = degrees_to_radians(lat1);
     lng1 = degrees_to_radians(lng1);
